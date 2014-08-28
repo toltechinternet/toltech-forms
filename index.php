@@ -1,9 +1,9 @@
 <?php
-/**
+ /*
  * Plugin Name: Toltech Forms
  * Plugin URI: http://www.toltech.co.uk
  * Description: A plugin for tracking and reporting your online enquiries.
- * Version: 1.0
+ * Version: 1.1
  * Author: Toltech Internet Solutions
  * Author URI: http://www.toltech.co.uk
  */
@@ -14,13 +14,127 @@ define( 'ROOT', plugins_url( '', __FILE__ ) );
 define( 'IMAGES', ROOT . '/images/' );
 define( 'STYLES', ROOT . '/css/' );
 define( 'SCRIPTS', ROOT . '/js/' );
+//define( 'LOG_FILE','/Applications/XAMPP/xamppfiles/htdocs/toltech-forms/wp-content/plugins/toltech-forms/log.log'); //home
+define( 'LOG_FILE','D:\TIS Projects\T\Toltech Internet Solutions\sites\dev.toltech.co.uk\wp-content\plugins\toltech-forms\log.log');
+
+register_activation_hook( __FILE__, 'toltech_forms_activation' );
+
+function toltech_forms_activation() {
+	global $wpdb;
+	
+	$table_name = $wpdb->prefix . 'forms_structure'; 
+	if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name){
+		/*****************************************************/
+		// Create table to store types of forms *************//
+		/*****************************************************/
+		$wpdb->query("CREATE TABLE " . $table_name . " (
+		  form_id VARCHAR(13) NOT NULL,
+		  post_id INT(11) NOT NULL,
+		  html TEXT NOT NULL,
+		  recipients TEXT NOT NULL,
+		  subject TEXT NOT NULL,
+		  return_url TEXT NOT NULL,
+		  success_message TEXT NOT NULL,
+		  ga VARCHAR(225),
+		  ga_goal VARCHAR(225),
+		  class VARCHAR(225),
+		  test_mode CHAR(1),
+		  PRIMARY KEY (form_id)
+		)");
+    	$message .= $table_name.' CREATED\r\n';
+    }else{
+    	$message .= $table_name.' NOT CREATED\r\n';
+    }
+	
+	$table_name = $wpdb->prefix . 'forms_submission'; 
+	if($wpdb->get_var("SHOW TABLES LIKE '%".$table_name."%'") != $table_name){
+	
+		/*****************************************************/
+		/*** Create table to store standard submission data **/
+		/*****************************************************/
+		
+		$wpdb->query("CREATE TABLE " . $table_name . " (
+		  submission_id int(11) NOT NULL AUTO_INCREMENT,
+		  form_id VARCHAR(13) NOT NULL,
+		  forename VARCHAR(225),
+		  surname VARCHAR(225),
+		  email VARCHAR(225),
+		  telephone VARCHAR(50),
+		  date_submitted DATETIME,
+		  PRIMARY KEY (submission_id)
+		)");
+		
+		$message .= $table_name.' CREATED\r\n';
+	}else{
+		$message .= $table_name.' NOT CREATED\r\n';
+	}
+	
+	$table_name = $wpdb->prefix . 'forms_customfields'; 
+	if($wpdb->get_var("SHOW TABLES LIKE '%".$table_name."%'") != $table_name){
+	
+		/*****************************************************/
+		/*** Create table to store dynamic field types *******/
+		/*****************************************************/
+		
+		$wpdb->query("CREATE TABLE " . $table_name . " (
+		  field_id int(11) NOT NULL AUTO_INCREMENT,
+		  form_id VARCHAR(13) NOT NULL,
+		  label TEXT,
+		  name VARCHAR(225),
+		  type VARCHAR(225),
+		  PRIMARY KEY (field_id)
+		)");
+		
+		$message .= $table_name.' CREATED\r\n';
+	}else{
+		$message .= $table_name.' NOT CREATED\r\n';
+	}
+	
+	$table_name = $wpdb->prefix . 'forms_metadata'; 
+	if($wpdb->get_var("SHOW TABLES LIKE '%".$table_name."%'") != $table_name){
+	
+		/*****************************************************/
+		/*** Create table to store dynamic submission data **/
+		/*****************************************************/
+		
+		$wpdb->query("CREATE TABLE " . $table_name . " (
+		  meta_id int(11) NOT NULL AUTO_INCREMENT,
+		  form_id VARCHAR(13) NOT NULL,
+		  submission_id INT(11),
+		  meta_key VARCHAR(255),
+		  meta_value TEXT,
+		  PRIMARY KEY (meta_id)
+		)");
+		
+		$message .= $table_name.' CREATED\r\n';
+	}else{
+		$message .= $table_name.' NOT CREATED\r\n';
+	}
+	
+	
+	
+	
+	
+	
+
+	$to      = 'joe@toltech.co.uk';
+	$subject = 'Plugin Activation';
+	$headers = 'From: webmaster@example.com' . "\r\n" .
+	    'Reply-To: webmaster@example.com' . "\r\n" .
+	    'X-Mailer: PHP/' . phpversion();
+	
+	mail($to, $subject, $message, $headers);
+}
+
+include('inc/functions.php');
+include('inc/shortcodes.php');
 
 // Define Custom Post Type
 function toltech_custom_post_type() {
     $labels = array(
         'name'                  =>   __( 'Toltech Forms', 'toltech' ),
         'singular_name'         =>   __( 'Toltech Form', 'toltech' ),
-        'add_new'          =>   __( 'Create New Form', 'toltech' ),
+        'add_new'          		=>   __( 'Create New Form', 'toltech' ),
         'all_items'             =>   __( 'All Forms', 'toltech' ),
         'edit_item'             =>   __( 'Edit Form', 'toltech' ),
         'new_item'              =>   __( 'New Form', 'toltech' ),
@@ -68,211 +182,6 @@ function toltech_submission_page(){
 
 function toltech_settings_page(){
  echo "<div class='wrap'><h2>Settings</h2></div>";
-}
-
-// Define Metabox
-add_action( 'add_meta_boxes', 'add_metaboxes' );
-function add_metaboxes() {
-    add_meta_box("toltech_form_details", "Toltech Form Details", "toltech_form_ui", "forms");
-}
-
-function toltech_form_ui() {
-    global $post;
-    $custom = get_post_custom($post->ID);
-
-    $id = md5(mt_rand());
-    $description = $custom['_description'][0];
-
-    $output .= '<p><label for="_price"><strong>Genereated Shorcode: <span style="color: #0074a2;">[form id="'. $id .'"]</span></strong></label><br />
-    <small>Please copy above shortcode into your page to display form</small></p>';
-   
-    $output .= '<hr>';
-
-    $output .= '<div style="margin-top: 30px;"></div>';
-    
-    // jQuery Dynamic Custom Field
-    $output .='<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script><script>
-    $(document).ready(function(){
-            $("#form-field").click(function() {
-            
-            $(".table")
-                .last()
-                .clone()
-                .appendTo($(".next-table"))
-                .find("input").attr("name",function(i,oldVal) {
-                    return oldVal.replace(/\[(\d+)\]/,function(_,m){
-                        return "[" + (+m + 1) + "]";
-                    });
-                });
-            
-            return false;
-            
-        });
-    });
-        </script>';
-    
-    $output .= '<a id="form-field" href="#" style="margin-bottom: 15px;" class="button button-primary button-large" />Add New Form Field</a>';
-
-    // Default Fields
-    $output .= '<table>';
-        $output .= '<tr>';
-            $output .= '<td>
-                            <input type="text" name="_description" id="_description" value="Firstname" />
-                        </td>';  
-            $output .= '<td>
-                            <select>
-                            <option>Text Input</option>
-                            <option>Text Area</option>
-                            <option>Radio Button</option>
-                            <option>Checkbox</option>
-                            </select>
-                        </td>';
-            $output .= '<td>
-                            <div style="margin-left: 10px;">
-                                Required Field? <input type="checkbox" name="_description" id="_description" value="Field 1 Name" />
-                                <a style=" margin-left: 15px;"href="#" />Remove Field</a>
-                            </div>
-                        </td>';
-        $output .= '</tr>';
-
-        $output .= '<tr>';     
-            $output .= '<td>
-                            <input type="text" name="_description" id="_description" value="Lastname" />
-                        </td>';
-            $output .= '<td>
-                            <select>
-                            <option>Text Input</option>
-                            <option>Text Area</option>
-                            <option>Radio Button</option>
-                            <option>Checkbox</option>
-                            </select>
-                        </td>';
-            $output .= '<td>
-                            <div style="margin-left: 10px;">
-                                Required Field? <input type="checkbox" name="_description" id="_description" value="Field 1 Name" />
-                                <a style=" margin-left: 15px;"href="#" />Remove Field</a>
-                            </div>
-                        </td>';
-        $output .= '</tr>';
-
-        $output .= '<tr>';
-            $output .= '<td>
-                            <input type="text" name="_description" id="_description" value="Email" />
-                        </td>';
-            $output .= '<td>
-                            <select>
-                            <option>Text Input</option>
-                            <option>Text Area</option>
-                            <option>Radio Button</option>
-                            <option>Checkbox</option>
-                            </select>
-                        </td>';
-            $output .= '<td>
-                            <div style="margin-left: 10px;">
-                                Required Field? <input type="checkbox" name="_description" id="_description" value="Field 1 Name" />
-                                <a style=" margin-left: 15px;"href="#" />Remove Field</a>
-                            </div>
-                        </td>';
-        $output .= '</tr>';
-
-        $output .= '<tr>';
-            $output .= '<td>
-                            <input type="text" name="_description" id="_description" value="Telephone" />
-                        </td>';
-            $output .= '<td>
-                            <select>
-                            <option>Text Input</option>
-                            <option>Text Area</option>
-                            <option>Radio Button</option>
-                            <option>Checkbox</option>
-                            </select>
-                        </td>';
-                $output .= '<td>
-                            <div style="margin-left: 10px;">
-                                Required Field? <input type="checkbox" name="_description" id="_description" value="Field 1 Name" />
-                                <a style=" margin-left: 15px;"href="#" />Remove Field</a>
-                            </div>
-                        </td>';
-        $output .= '</tr>';
-    $output .= '</table>';
-
-
-    // Custom Field
-    $output .= '<table class="table">';
-        $output .= '<tr>';
-            $output .= '<td>
-                            <input type="text" name="_description" id="_description" value="Custom Field" />
-                        </td>';
-            $output .= '<td>
-                            <select>
-                            <option>Text Input</option>
-                            <option>Text Area</option>
-                            <option>Radio Button</option>
-                            <option>Checkbox</option>
-                            </select>
-                        </td>';
-            $output .= '<td>
-                        <div style="margin-left: 10px;">
-                            Required Field? <input type="checkbox" name="_description" id="_description" value="Field 1 Name" />
-                            <a style=" margin-left: 15px;"href="#" />Remove Field</a>
-                        </div>
-                    </td>';
-            $output .= '<tr>';
-    $output .= '</table>';
-
-    // Dynamic new field controlled by jQuery
-    $output .= '<div class="next-table"></div>';
-    
-
-    $output .= '<div style="margin-top: 30px;"></div>';
-    $output .= '<hr>';
-    
-    $output .= '<h3 style="border: 0px; padding-left: 0px; padding-top: 0px;">Form Settings</h3>';
-    $output .= '<table style="float: left; margin-right: 15px;">
-                    <tr>
-                        <td>Recipients:</td>
-                        <td><input type="text" name="_description" id="_description" value="" /></td>
-                    </tr>
-                    <tr>
-                        <td>Subject:</td>
-                        <td><input type="text" name="_description" id="_description" value="" /></td>
-                    </tr>
-                    <tr>
-                        <td>Return URL:</td>
-                        <td><input type="text" name="_description" id="_description" value="" /></td>
-                    </tr>
-                    <tr>
-                        <td>Success Message:</td>
-                        <td><input type="text" name="_description" id="_description" value="" /></td>
-                    </tr>
-                    <tr>
-                        <td>Google Analytics:</td>
-                        <td><input type="text" name="_description" id="_description" value="" /></td>
-                    </tr>
-                    <tr>
-                        <td>Google Goal:</td>
-                        <td><input type="text" name="_description" id="_description" value="" /></td>
-                    </tr>
-                </table>';
-
-    $output .= '<table style="float: left;">
-                    <tr>
-                        <td></td>
-                        <td>Test Mode <input type="checkbox" name="_description" id="_description" value="Field 1 Name" />
-                            Live Mode <input type="checkbox" name="_description" id="_description" value="Field 1 Name" /></td>
-                    </tr>
-
-                </table>';
-    
-    $output .= '<div style="clear: both;"></div>';
-
-    echo $output;  
-
-}   
-
-// Define Shortcode
-add_shortcode( 'toltech-forms', 'shortcode_toltech_forms' );
-function shortcode_toltech_forms() {
 }
 
 // Define save button as "Save Toltech Form"
